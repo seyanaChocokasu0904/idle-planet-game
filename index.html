@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>基本全自動ゲーム</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0e13;
+    --bg-elev:#0f151c;
+    --panel:#141d26;
+    --panel2:#182230;
+    --border:rgba(255,255,255,0.08);
+    --accent:#4fd1c5;
+    --accent-dim:rgba(79,209,197,0.15);
+    --accent-2:#e8a33d;
+    --danger:#d9636d;
+    --col-rover:#e8a33d;
+    --col-dome:#4fd1c5;
+    --col-shop:#9b7fe0;
+    --col-log:#6ea8d8;
+    --col-trade:#7fd88f;
+    --text:#dbe3e9;
+    --text-dim:#8291a0;
+    --text-faint:#4b5661;
+    --radius:3px;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; height:100%;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Space Grotesk',sans-serif;
+    overflow:hidden;
+  }
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  button{
+    font-family:'Space Grotesk',sans-serif;
+    cursor:pointer;
+    border:1px solid var(--border);
+    background:var(--panel2);
+    color:var(--text);
+    border-radius:var(--radius);
+    transition:border-color .15s ease, background .15s ease;
+  }
+  button:hover:not(:disabled){border-color:var(--accent);}
+  button:disabled{opacity:.35; cursor:not-allowed;}
+  button:focus-visible, input:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  #app{position:relative; width:100vw; height:100vh;}
+
+  #stars{position:fixed; inset:0; overflow:hidden; z-index:0; pointer-events:none;}
+  .star{position:absolute; width:2px; height:2px; background:#cfe8ff; border-radius:50%; animation:twinkle 4s ease-in-out infinite;}
+  @keyframes twinkle{0%,100%{opacity:.15;} 50%{opacity:.9;}}
+
+  .screen{
+    position:absolute; inset:0; z-index:1;
+    display:none;
+    flex-direction:column; align-items:center; justify-content:center;
+  }
+  .screen.active{display:flex;}
+
+  /* ---------- Title ---------- */
+  #screen-title h1{
+    font-size:clamp(28px,5vw,46px);
+    font-weight:700;
+    letter-spacing:.02em;
+    margin:0 0 14px 0;
+    color:var(--text);
+  }
+  #screen-title .subtitle{
+    text-align:center;
+    color:var(--text-dim);
+    font-size:14px;
+    line-height:1.9;
+    margin-bottom:44px;
+    max-width:520px;
+    padding:0 20px;
+  }
+  .title-buttons{display:flex; flex-direction:column; gap:12px; width:260px;}
+  .title-buttons button{padding:14px 0; font-size:15px; letter-spacing:.04em;}
+  .title-buttons button.primary{background:var(--accent-dim); border-color:var(--accent); color:var(--accent);}
+
+  /* ---------- Options ---------- */
+  #screen-options .options-panel, #screen-game-options .options-panel{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    width:min(480px,90vw);
+    max-height:86vh;
+    overflow-y:auto;
+    padding:28px 30px;
+  }
+  .options-panel h2{margin:0 0 22px 0; font-size:18px; font-weight:500; color:var(--text);}
+  .opt-row{margin-bottom:22px;}
+  .opt-row label{display:block; font-size:12px; color:var(--text-dim); margin-bottom:8px; letter-spacing:.03em;}
+  .opt-row input[type=range]{width:100%; accent-color:var(--accent);}
+  .opt-row input[type=text]{
+    width:100%; padding:9px 10px; background:var(--bg-elev); border:1px solid var(--border);
+    color:var(--text); border-radius:var(--radius); font-family:'Space Grotesk',sans-serif; font-size:14px;
+  }
+  .val-readout{color:var(--accent); font-family:'IBM Plex Mono',monospace; font-size:12px;}
+  .radio-group{display:flex; gap:8px; flex-wrap:wrap;}
+  .radio-group button{padding:8px 14px; font-size:13px;}
+  .radio-group button.selected{border-color:var(--accent); color:var(--accent); background:var(--accent-dim);}
+  .note{font-size:12px; color:var(--text-faint);}
+  .danger-zone{border-top:1px solid var(--border); margin-top:26px; padding-top:20px;}
+  .danger-zone .row{display:flex; gap:10px; flex-wrap:wrap;}
+  .danger-zone button{border-color:rgba(217,99,109,0.4); color:var(--danger); font-size:12.5px; padding:9px 12px;}
+  .danger-zone button:hover{border-color:var(--danger); background:rgba(217,99,109,0.08);}
+  .opt-back{margin-top:24px; width:100%; padding:11px 0; font-size:13px;}
+
+  /* ---------- Countdown ---------- */
+  #screen-countdown .countdown-num{
+    font-family:'IBM Plex Mono',monospace; font-size:96px; color:var(--accent); font-weight:600;
+  }
+  #screen-countdown p{color:var(--text-dim); font-size:13px; letter-spacing:.03em;}
+
+  /* ---------- Game ---------- */
+  #screen-game{align-items:stretch; justify-content:flex-start; padding:0;}
+  .game-topbar{
+    display:flex; flex-direction:column; align-items:flex-start; gap:5px;
+    padding:14px 22px; border-bottom:1px solid var(--border); flex-shrink:0;
+  }
+  .game-topbar .who{font-size:12.5px; color:var(--text-dim);}
+  .game-topbar .who span{color:var(--accent);}
+  .goal-banner{font-size:11.5px; color:var(--text-faint); max-width:640px; line-height:1.6;}
+  .control-cluster{position:absolute; top:14px; right:20px; display:flex; flex-direction:column; gap:8px; z-index:5;}
+  .control-cluster button{width:130px; padding:9px 0; font-size:12.5px; text-align:center;}
+
+  .game-body{
+    flex:1; display:flex; gap:0; overflow:auto; padding:70px 24px 24px 24px; justify-content:center;
+  }
+  .game-columns{display:flex; gap:26px; width:100%; max-width:980px; flex-wrap:wrap;}
+  .viewport-col{flex:1 1 420px; min-width:320px;}
+  .side-col{flex:1 1 300px; min-width:280px; display:flex; flex-direction:column; gap:16px;}
+
+  .field-panel{
+    background:var(--panel); border:1px solid var(--border); border-radius:var(--radius);
+    padding:18px; position:relative; overflow:hidden; min-height:220px;
+    background-size:cover; background-position:center; background-blend-mode:normal;
+  }
+  .field-panel.accent-rover{border-top:2px solid var(--col-rover); background:linear-gradient(180deg, rgba(232,163,61,0.07), var(--panel) 60%);}
+  .field-panel.accent-rover .panel-label{color:var(--col-rover);}
+  .field-panel.accent-dome{border-top:2px solid var(--col-dome); background:linear-gradient(180deg, rgba(79,209,197,0.07), var(--panel) 60%);}
+  .field-panel.accent-dome .panel-label{color:var(--col-dome);}
+  .field-panel.accent-shop{border-top:2px solid var(--col-shop); background:linear-gradient(180deg, rgba(155,127,224,0.07), var(--panel) 60%);}
+  .field-panel.accent-shop .panel-label{color:var(--col-shop);}
+  .field-panel.accent-log{border-top:2px solid var(--col-log); background:linear-gradient(180deg, rgba(110,168,216,0.07), var(--panel) 60%);}
+  .field-panel.accent-log .panel-label{color:var(--col-log);}
+  .field-panel.accent-trade{border-top:2px solid var(--col-trade); background:linear-gradient(180deg, rgba(127,216,143,0.07), var(--panel) 60%);}
+  .field-panel.accent-trade .panel-label{color:var(--col-trade);}
+  .field-panel.has-image{background-color:transparent;}
+  .field-panel.has-image::before{
+    content:""; position:absolute; inset:0; background:rgba(10,14,19,0.78); z-index:0;
+  }
+  .field-panel.has-image > *{position:relative; z-index:1;}
+  .field-panel .panel-label{font-size:11px; color:var(--text-faint); letter-spacing:.06em; margin-bottom:12px;}
+  .track{position:relative; height:70px; margin:20px 0 6px 0; border-bottom:1px dashed var(--border);}
+  #rover{position:absolute; bottom:-2px; left:0;}
+  #drone{position:absolute; bottom:44px; left:0; opacity:0; transition:opacity .6s;}
+  .rover-part{transition:opacity .4s;}
+
+  .dome-wrap{display:flex; justify-content:center; margin:6px 0 14px 0;}
+  .stage-badge{
+    display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text-dim);
+    background:var(--bg-elev); border:1px solid var(--border); border-radius:var(--radius); padding:3px 8px; margin-top:8px;
+  }
+  .progress-bar{height:5px; background:var(--bg-elev); border-radius:3px; overflow:hidden; margin-top:8px;}
+  .progress-bar > div{height:100%; background:var(--accent); width:0%; transition:width .5s ease;}
+
+  .resource-list{list-style:none; margin:0; padding:0; display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  .resource-list li{background:var(--bg-elev); border:1px solid var(--border); border-radius:var(--radius); padding:10px 12px;}
+  .resource-list .rname{font-size:11px; color:var(--text-dim);}
+  .resource-list .rval{font-family:'IBM Plex Mono',monospace; font-size:17px; color:var(--text); margin-top:3px;}
+
+  .shop-list{display:flex; flex-direction:column; gap:8px;}
+  .shop-item{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    background:var(--bg-elev); border:1px solid var(--border); border-radius:var(--radius); padding:10px 12px;
+  }
+  .shop-item .sname{font-size:12.5px;}
+  .shop-item .scost{font-size:11px; color:var(--text-dim); font-family:'IBM Plex Mono',monospace;}
+  .shop-item button{padding:6px 12px; font-size:12px; flex-shrink:0;}
+
+  .log-panel{max-height:120px; overflow-y:auto; display:flex; flex-direction:column-reverse; gap:6px;}
+  .log-line{font-size:12px; color:var(--text-dim); border-left:2px solid var(--border); padding-left:8px;}
+  .log-line.event{color:var(--accent-2); border-left-color:var(--accent-2);}
+  .log-line.milestone{color:var(--accent); border-left-color:var(--accent);}
+
+  .anomaly-btn{
+    background:var(--accent-2); color:#241a06; border:none; padding:14px 26px; border-radius:var(--radius);
+    font-size:14px; font-weight:600; box-shadow:0 0 0 4px rgba(232,163,61,0.15);
+    animation:pulse-warn 1s ease-in-out infinite;
+  }
+  @keyframes pulse-warn{0%,100%{transform:scale(1);} 50%{transform:scale(1.05);}}
+
+  .dialogue-box{
+    position:fixed; bottom:22px; left:50%; transform:translateX(-50%);
+    background:var(--panel); border:1px solid var(--accent); border-radius:var(--radius);
+    padding:14px 20px; max-width:480px; font-size:13px; color:var(--text); z-index:15;
+  }
+  .dialogue-box .speaker{color:var(--accent); font-size:11px; margin-bottom:4px;}
+
+  /* ---------- Modal ---------- */
+  #modal-layer{position:fixed; inset:0; z-index:50; display:none; align-items:center; justify-content:center; background:rgba(5,8,11,0.6);}
+  #modal-layer.active{display:flex;}
+  .modal-box{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:24px; width:min(360px,86vw);}
+  .modal-box p{font-size:13.5px; color:var(--text); line-height:1.7; margin:0 0 20px 0;}
+  .modal-actions{display:flex; gap:10px; justify-content:flex-end;}
+  .modal-actions button{padding:9px 16px; font-size:13px;}
+  .modal-actions .confirm-danger{border-color:var(--danger); color:var(--danger);}
+
+  /* aspect ratio variants for game screen */
+  #app.aspect-portrait .game-columns{flex-direction:column; max-width:460px;}
+  #app.aspect-landscape .game-columns{max-width:1180px;}
+  #app.aspect-landscape .viewport-col{flex:1.6 1 500px;}
+
+  #toast-layer{position:fixed; top:16px; left:50%; transform:translateX(-50%); z-index:60; display:flex; flex-direction:column; gap:8px; align-items:center; pointer-events:none;}
+  .toast{background:var(--panel); border:1px solid var(--accent); color:var(--text); padding:10px 18px; border-radius:var(--radius); font-size:13px; box-shadow:0 4px 18px rgba(0,0,0,0.35); opacity:0; transform:translateY(-8px); animation:toast-in-out 3.4s ease forwards; white-space:nowrap;}
+  .toast.warm{border-color:var(--accent-2);}
+  @keyframes toast-in-out{
+    0%{opacity:0; transform:translateY(-8px);}
+    8%{opacity:1; transform:translateY(0);}
+    85%{opacity:1; transform:translateY(0);}
+    100%{opacity:0; transform:translateY(-8px);}
+  }
+  .field-panel.flash{animation:panel-flash 1.3s ease;}
+  .field-panel.flash-warm{animation:panel-flash-warm 1.3s ease;}
+  @keyframes panel-flash{
+    0%{box-shadow:0 0 0 0 rgba(79,209,197,0); border-color:var(--border);}
+    15%{box-shadow:0 0 0 5px rgba(79,209,197,0.35); border-color:var(--accent);}
+    100%{box-shadow:0 0 0 0 rgba(79,209,197,0); border-color:var(--border);}
+  }
+  @keyframes panel-flash-warm{
+    0%{box-shadow:0 0 0 0 rgba(232,163,61,0); border-color:var(--border);}
+    15%{box-shadow:0 0 0 5px rgba(232,163,61,0.35); border-color:var(--accent-2);}
+    100%{box-shadow:0 0 0 0 rgba(232,163,61,0); border-color:var(--border);}
+  }
+  #dome-core{transition:r 0.6s ease, opacity 0.6s ease;}
+  #dome-ring2{transition:opacity 0.6s ease;}
+
+  ::-webkit-scrollbar{width:8px;}
+  ::-webkit-scrollbar-thumb{background:var(--panel2); border-radius:4px;}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stars"></div>
+  <div id="toast-layer"></div>
+
+  <!-- TITLE -->
+  <div class="screen active" id="screen-title">
+    <h1>基本全自動ゲーム</h1>
+    <div class="subtitle">
+      キャラ操作は不要!・何かをしながら達成感を味わえる!<br>
+      楽をしたいあなた!・日々の忙しい日々に飽き飽きしているそこのあなた!!
+    </div>
+    <div class="title-buttons">
+      <button class="primary" id="btn-newgame">はじめから</button>
+      <button id="btn-continue">つづきから</button>
+      <button id="btn-title-options">オプション</button>
+    </div>
+  </div>
+
+  <!-- OPTIONS (from title) -->
+  <div class="screen" id="screen-options">
+    <div class="options-panel" id="options-panel-title"></div>
+  </div>
+
+  <!-- OPTIONS (from in-game) -->
+  <div class="screen" id="screen-game-options">
+    <div class="options-panel" id="options-panel-game"></div>
+  </div>
+
+  <!-- COUNTDOWN -->
+  <div class="screen" id="screen-countdown">
+    <div class="countdown-num mono" id="countdown-num">15</div>
+    <p>進行状況を復元しています。まもなく開始します…</p>
+  </div>
+
+  <!-- GAME -->
+  <div class="screen" id="screen-game">
+    <div class="game-topbar">
+      <div class="who">探査記録者: <span id="hud-username">-</span> ／ 経過時間 <span class="mono" id="hud-elapsed">0</span> 秒</div>
+      <div class="goal-banner">目標:まずは生態ドームを5段階まで育てること。異常結晶を集めて未知の環境へ進むと、15段階まで育てられるようになります</div>
+    </div>
+    <div class="control-cluster">
+      <button id="btn-pause">一時停止</button>
+      <button id="btn-save">セーブ</button>
+      <button id="btn-game-options">オプション</button>
+      <button id="btn-help">遊び方</button>
+    </div>
+    <div class="game-body">
+      <div class="game-columns">
+        <div class="viewport-col">
+          <div class="field-panel accent-rover" id="panel-rover">
+            <div class="panel-label">探査ローバー ー 自動収集役(操作不要)</div>
+            <div class="track">
+              <svg id="drone" width="26" height="18" viewBox="0 0 26 18"><ellipse cx="13" cy="9" rx="11" ry="4" fill="none" stroke="#4fd1c5" stroke-width="1.4"/><circle cx="13" cy="9" r="2" fill="#4fd1c5"/></svg>
+              <svg id="rover" width="70" height="40" viewBox="0 0 70 40">
+                <rect x="14" y="16" width="42" height="14" rx="2" fill="#8291a0"/>
+                <circle cx="22" cy="32" r="6" fill="#141d26" stroke="#4b5661"/>
+                <circle cx="48" cy="32" r="6" fill="#141d26" stroke="#4b5661"/>
+                <line x1="35" y1="16" x2="35" y2="6" stroke="#8291a0" stroke-width="2" class="rover-part" id="part-antenna"/>
+                <circle cx="35" cy="5" r="2" fill="#4fd1c5" class="rover-part" id="part-antenna-tip"/>
+                <rect x="10" y="20" width="8" height="8" fill="#e8a33d" class="rover-part" id="part-drill" style="opacity:0;"/>
+                <rect x="52" y="12" width="14" height="10" rx="1" fill="#4fd1c5" opacity="0.35" class="rover-part" id="part-lab" style="opacity:0;"/>
+                <line x1="58" y1="12" x2="62" y2="4" stroke="#e8a33d" stroke-width="2" class="rover-part" id="part-arm" style="opacity:0;"/>
+              </svg>
+            </div>
+            <div class="stage-badge">ローバー段階 <span class="mono" id="rover-stage-num">1</span>/<span class="mono" id="rover-stage-max">5</span></div>
+            <div id="rover-damage-box" style="display:none; margin-top:10px;"></div>
+          </div>
+
+          <div class="field-panel accent-dome" id="panel-dome" style="margin-top:16px;">
+            <div class="panel-label">生態観測ドーム ー ここが目標(まずは5段階まで育てる)</div>
+            <div class="dome-wrap">
+              <svg width="140" height="120" viewBox="0 0 140 120">
+                <path d="M10 110 A60 60 0 0 1 130 110" fill="none" stroke="#4b5661" stroke-width="2"/>
+                <line x1="10" y1="110" x2="130" y2="110" stroke="#4b5661" stroke-width="2"/>
+                <circle id="dome-core" cx="70" cy="90" r="8" fill="#4fd1c5" opacity="0.5"/>
+                <circle id="dome-ring2" cx="70" cy="90" r="18" fill="none" stroke="#4fd1c5" stroke-width="1" opacity="0"/>
+                <g id="dome-life"></g>
+              </svg>
+            </div>
+            <div style="text-align:center;">
+              <span class="stage-badge">ドーム段階 <span class="mono" id="dome-stage-num">1</span>/<span class="mono" id="dome-stage-max">5</span></span>
+              <div class="progress-bar"><div id="dome-progress-bar"></div></div>
+            </div>
+          </div>
+
+          <div class="field-panel accent-trade" id="panel-trade" style="margin-top:16px;">
+            <div class="panel-label">取引ショップ ー 資源同士を交換</div>
+            <div class="shop-list" id="trade-list"></div>
+          </div>
+        </div>
+
+        <div class="side-col">
+          <div class="field-panel">
+            <div class="panel-label">収集資源</div>
+            <ul class="resource-list">
+              <li><div class="rname">鉱石</div><div class="rval mono" id="res-ore">0</div></li>
+              <li><div class="rname">エネルギー結晶</div><div class="rval mono" id="res-energy">0</div></li>
+              <li><div class="rname">地質サンプル</div><div class="rval mono" id="res-sample">0</div></li>
+              <li><div class="rname">異常結晶</div><div class="rval mono" id="res-crystal">0</div></li>
+            </ul>
+          </div>
+
+          <div class="field-panel accent-shop" id="panel-shop">
+            <div class="panel-label">開発ショップ ー 資源を使って自動収集/成長を強化</div>
+            <div id="stage-advance-box" style="margin-bottom:14px;"></div>
+            <div class="shop-list" id="shop-list"></div>
+          </div>
+
+          <div class="field-panel accent-log" id="panel-log">
+            <div class="panel-label">ゲームログ ー 起きた出来事の記録</div>
+            <div class="log-panel" id="log-panel"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-layer">
+    <div class="modal-box">
+      <p id="modal-text"></p>
+      <div class="modal-actions" id="modal-actions"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- Utilities ---------------- */
+  const $ = (id)=>document.getElementById(id);
+  const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+  const isMobile = ()=> window.matchMedia('(pointer:coarse)').matches || window.innerWidth <= 760;
+
+  function makeStars(n){
+    const wrap = $('stars');
+    for(let i=0;i<n;i++){
+      const s = document.createElement('div');
+      s.className='star';
+      s.style.left = Math.random()*100+'%';
+      s.style.top = Math.random()*100+'%';
+      s.style.animationDelay = (Math.random()*4)+'s';
+      wrap.appendChild(s);
+    }
+  }
+  makeStars(90);
+
+  /* ---------------- Optional custom panel images ---------------- -
+     画像を用意した場合は、下の4つの空文字("")の部分にファイル名やURLを入れてください。
+     例:同じフォルダに "images" フォルダを作り、そこに画像を置いた場合
+         rover: 'images/rover.jpg'
+     空文字のままにしておけば、今までどおり色分けされた背景で表示されます。
+     画像は自動的に少し暗くオーバーレイされるので、上に文字が乗っても読みやすくなります。
+     推奨サイズ:横600px程度、正方形〜横長の写真やイラストが綺麗に収まります。
+  --------------------------------------------------------------- */
+  const PANEL_IMAGES = {
+    rover: '',   // 探査ローバーパネルの背景画像
+    dome:  '',   // 生態ドームパネルの背景画像
+    shop:  '',   // 開発ショップパネルの背景画像
+    log:   '',   // ゲームログパネルの背景画像
+    trade: ''    // 取引ショップパネルの背景画像
+  };
+  function applyPanelImages(){
+    const map = { rover:'panel-rover', dome:'panel-dome', shop:'panel-shop', log:'panel-log', trade:'panel-trade' };
+    Object.keys(map).forEach(key=>{
+      const el = $(map[key]);
+      const src = PANEL_IMAGES[key];
+      if(el && src){
+        el.style.backgroundImage = "url('"+src+"')";
+        el.classList.add('has-image');
+      }
+    });
+  }
+  applyPanelImages();
+
+  /* ---------------- Storage ---------------- */
+  const SAVE_KEY = 'save-data';
+
+  // Claude's artifact runtime injects window.storage for persistent, cross-session save data.
+  // When this file is downloaded and opened/hosted outside Claude, window.storage does not
+  // exist, so we fall back to the browser's own localStorage (kept local to that browser/device).
+  const storageBackend = (typeof window.storage !== 'undefined' && window.storage && typeof window.storage.get === 'function')
+    ? window.storage
+    : {
+        async get(key){
+          const v = localStorage.getItem('afg_'+key);
+          if(v===null) throw new Error('not found');
+          return {key, value:v};
+        },
+        async set(key, value){
+          localStorage.setItem('afg_'+key, value);
+          return {key, value};
+        },
+        async delete(key){
+          localStorage.removeItem('afg_'+key);
+          return {key, deleted:true};
+        }
+      };
+
+  async function loadSave(){
+    try{
+      const r = await storageBackend.get(SAVE_KEY);
+      return r ? normalizeState(JSON.parse(r.value)) : null;
+    }catch(e){ return null; }
+  }
+  async function writeSave(state){
+    const payload = JSON.stringify(state);
+    for(let attempt=0; attempt<2; attempt++){
+      try{
+        await storageBackend.set(SAVE_KEY, payload);
+        return true;
+      }catch(e){
+        if(attempt===0){
+          await new Promise(res=>setTimeout(res, 800));
+        }
+      }
+    }
+    return false;
+  }
+  async function removeSave(){
+    try{ await storageBackend.delete(SAVE_KEY); }catch(e){}
+  }
+
+  /* ---------------- Audio (procedural, no external assets) ---------------- */
+  let actx=null, bgmGain=null, sfxGain=null, bgmOsc=[], bgmLfo=null, bgmMode='calm';
+  function ensureAudio(){
+    if(actx) return;
+    actx = new (window.AudioContext||window.webkitAudioContext)();
+    bgmGain = actx.createGain(); bgmGain.gain.value=0.0; bgmGain.connect(actx.destination);
+    sfxGain = actx.createGain(); sfxGain.gain.value=0.5; sfxGain.connect(actx.destination);
+    applyVolumes();
+    startBgm();
+  }
+  function applyVolumes(){
+    if(!actx) return;
+    const s = gameState ? gameState.settings : {bgm:60, se:70};
+    bgmGain.gain.setTargetAtTime((s.bgm/100)*0.18, actx.currentTime, 0.3);
+    sfxGain.gain.setTargetAtTime(s.se/100, actx.currentTime, 0.05);
+  }
+  function chordFor(mode){
+    return mode==='event' ? [220.00,277.18,329.63] : [130.81,164.81,196.00];
+  }
+  function startBgm(){
+    stopBgm();
+    const freqs = chordFor(bgmMode);
+    bgmOsc = freqs.map((f,i)=>{
+      const o = actx.createOscillator();
+      o.type='sine'; o.frequency.value=f;
+      const g = actx.createGain(); g.gain.value = i===0?0.5:0.3;
+      o.connect(g); g.connect(bgmGain); o.start();
+      return o;
+    });
+  }
+  function stopBgm(){ bgmOsc.forEach(o=>{ try{o.stop();}catch(e){} }); bgmOsc=[]; }
+  function setBgmMode(mode){
+    if(bgmMode===mode || !actx) return;
+    bgmMode = mode;
+    startBgm();
+  }
+  function playTone(freq, dur, type){
+    if(!actx) return;
+    const o = actx.createOscillator(); const g = actx.createGain();
+    o.type = type||'sine'; o.frequency.value = freq;
+    g.gain.value=0.0001;
+    o.connect(g); g.connect(sfxGain);
+    const t = actx.currentTime;
+    g.gain.exponentialRampToValueAtTime(0.6, t+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    o.start(t); o.stop(t+dur+0.02);
+  }
+  function sfx(name){
+    if(!actx) return;
+    if(name==='ping'){ playTone(880,0.12,'sine'); }
+    else if(name==='milestone'){ playTone(660,0.1,'triangle'); setTimeout(()=>playTone(880,0.14,'triangle'),90); }
+    else if(name==='stageup'){ [523,659,784].forEach((f,i)=>setTimeout(()=>playTone(f,0.22,'sine'),i*110)); }
+    else if(name==='upgrade'){ playTone(196,0.18,'square'); }
+    else if(name==='alert'){ playTone(1046,0.1,'square'); setTimeout(()=>playTone(1046,0.1,'square'),140); }
+    else if(name==='click'){ playTone(440,0.05,'sine'); }
+  }
+
+  /* ---------------- Game state ---------------- */
+  let gameState = null;
+  let tickTimer = null;
+  let countdownTimer = null;
+  let elapsedTick = 0;
+  let optionsOrigin = 'title';
+  let dialogueTimer = null;
+  let anomalyTimer = null, anomalyActive=false;
+
+  function defaultState(username){
+    return {
+      username: username || '記録者A',
+      resources:{ ore:0, energy:0, sample:0, crystal:0 },
+      roverStage:1,
+      domeStage:1,
+      domeProgress:0,
+      collectionRate:1,
+      growthRate:1,
+      elapsed:0,
+      settings:{ bgm:60, se:70, aspect: isMobile() ? 'mobile' : 'default' },
+      shop:{ drill:0, sprinkler:0, sensor:0, engine:0 },
+      stage:1,
+      roverDamaged:false,
+      damagedTicks:0
+    };
+  }
+  function normalizeState(s){
+    if(typeof s.stage !== 'number') s.stage = 1;
+    if(typeof s.roverDamaged !== 'boolean') s.roverDamaged = false;
+    if(typeof s.damagedTicks !== 'number') s.damagedTicks = 0;
+    if(!s.shop) s.shop = {};
+    ['drill','sprinkler','sensor','engine'].forEach(k=>{ if(typeof s.shop[k]!=='number') s.shop[k]=0; });
+    if(!s.resources) s.resources = { ore:0, energy:0, sample:0, crystal:0 };
+    if(typeof s.resources.crystal !== 'number') s.resources.crystal = 0;
+    return s;
+  }
+
+  const SHOP_ITEMS = [
+    { id:'drill', name:'ドリル強化', costRes:'ore', cost:80, effect:s=>{ s.collectionRate += 0.15; } },
+    { id:'sprinkler', name:'散水システム強化', costRes:'energy', cost:60, effect:s=>{ s.growthRate += 0.15; } },
+    { id:'sensor', name:'高感度センサー', costRes:'sample', cost:40, effect:s=>{ s.collectionRate += 0.1; } },
+    { id:'engine', name:'動力エンジン強化', costRes:'energy', cost:130, effect:s=>{ s.collectionRate += 0.05; } },
+  ];
+
+  const STAGE2_INFO_HTML =
+    '未知の環境に到達しました。ここでは新しい出来事がランダムに発生します。<br><br>' +
+    '・異常鉱石回収:ドリル強化を5回以上行っていないと見逃してしまいます<br>' +
+    '・ローバー損傷:放置すると資源回収効率が大きく落ち、時間経過でドームの段階も下がってしまいます。エネルギー結晶300で修復できます<br>' +
+    '・竜巻:動力エンジンを強化していないと資源の一部を失います<br>' +
+    '・大量鉱石発見:資源が大きく増える幸運なイベントです';
+
+  const DIALOGUES = [
+    '他探査チームより通信:「そちらの地質データ、興味深いですね」',
+    '基地AI:「大気の状態は安定しています。作業を継続してください」',
+    '他探査チームより通信:「そちらの空、少し霧が出ていませんか」',
+    '基地AI:「ドームの生育記録を更新しました」',
+  ];
+
+  /* ---------------- Screen management ---------------- */
+  function showScreen(name){
+    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+    $(name).classList.add('active');
+  }
+
+  /* ---------------- Modal ---------------- */
+  function showConfirm(text, onYes, opts){
+    opts = opts || {};
+    $('modal-text').innerHTML = text;
+    const actions = $('modal-actions');
+    actions.innerHTML='';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = opts.cancelLabel || 'キャンセル';
+    cancelBtn.onclick = ()=>{ $('modal-layer').classList.remove('active'); };
+    const okBtn = document.createElement('button');
+    okBtn.textContent = opts.okLabel || '実行する';
+    okBtn.className = opts.danger ? 'confirm-danger' : '';
+    okBtn.onclick = ()=>{ $('modal-layer').classList.remove('active'); onYes(); };
+    actions.appendChild(cancelBtn); actions.appendChild(okBtn);
+    $('modal-layer').classList.add('active');
+  }
+
+  const TUTORIAL_HTML =
+    'このゲームはすべて自動で進みます。操作しなくても勝手に進行します。<br><br>' +
+    '① 探査ローバーが自動で資源を集めます(操作不要)<br>' +
+    '② 集めた資源を使って「生態ドーム」が自動で成長します<br>' +
+    '③ 目標は生態ドームを15段階まで育てることです<br><br>' +
+    'ローバーの段階は「集める速さ」が上がるだけのおまけ要素です。基本はドームの成長だけ見ていれば大丈夫です。<br><br>' +
+    'まれに「異常信号」というボタンが出てきます。時間内に押すと異常結晶(レア資源)がもらえます。異常結晶を100個集めると、開発ショップから「次なる未知の環境」へ進めます。<br><br>' +
+    '右上の「一時停止」「セーブ」「オプション」はいつでも押せます。分からなくなったら「遊び方」ボタンでこの説明を見返せます。';
+
+  function showInfo(html){
+    $('modal-text').innerHTML = html;
+    const actions = $('modal-actions');
+    actions.innerHTML='';
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '閉じる';
+    closeBtn.onclick = ()=>{ $('modal-layer').classList.remove('active'); };
+    actions.appendChild(closeBtn);
+    $('modal-layer').classList.add('active');
+  }
+
+  /* ---------------- Title actions ---------------- */
+  $('btn-newgame').addEventListener('click', async ()=>{
+    ensureAudio(); sfx('click');
+    const existing = await loadSave();
+    if(existing){
+      showConfirm('保存されているデータがあります。破棄してはじめから開始しますか?', async ()=>{
+        await removeSave();
+        beginNewGame();
+      }, {danger:true, okLabel:'破棄して開始'});
+    } else {
+      beginNewGame();
+    }
+  });
+
+  function beginNewGame(){
+    gameState = defaultState();
+    applyAspect();
+    enterGameScreen();
+    writeSave(gameState);
+    showInfo(TUTORIAL_HTML);
+  }
+
+  $('btn-continue').addEventListener('click', async ()=>{
+    ensureAudio(); sfx('click');
+    const saved = await loadSave();
+    if(!saved){
+      showConfirm('保存されているデータが見つかりませんでした。', ()=>{}, {okLabel:'閉じる'});
+      return;
+    }
+    gameState = saved;
+    applyAspect();
+    startCountdown();
+  });
+
+  $('btn-title-options').addEventListener('click', ()=>{
+    ensureAudio(); sfx('click');
+    optionsOrigin = 'title';
+    renderOptions('options-panel-title', 'screen-title');
+    showScreen('screen-options');
+  });
+
+  /* ---------------- Countdown ---------------- */
+  function startCountdown(){
+    showScreen('screen-countdown');
+    let n = 15;
+    $('countdown-num').textContent = n;
+    clearInterval(countdownTimer);
+    countdownTimer = setInterval(()=>{
+      n--;
+      $('countdown-num').textContent = n;
+      sfx('ping');
+      if(n<=0){
+        clearInterval(countdownTimer);
+        enterGameScreen();
+      }
+    },1000);
+  }
+
+  /* ---------------- Enter game ---------------- */
+  function enterGameScreen(){
+    showScreen('screen-game');
+    $('hud-username').textContent = gameState.username;
+    renderShop();
+    renderAll();
+    resumeTicking();
+  }
+
+  let autosaveTimer = null;
+  function resumeTicking(){
+    clearInterval(tickTimer);
+    tickTimer = setInterval(tick, 1000);
+    if(!autosaveTimer){
+      autosaveTimer = setInterval(()=>{ if(gameState) writeSave(gameState); }, 30000);
+    }
+  }
+  function stopTicking(){ clearInterval(tickTimer); tickTimer=null; }
+
+  const ROVER_STAGE_MAX_EARLY = 5, ROVER_STAGE_MAX_LATE = 15;
+  const DOME_STAGE_MAX_EARLY = 5, DOME_STAGE_MAX_LATE = 15;
+  const ROVER_THRESHOLDS = [0];
+  for(let i=1;i<ROVER_STAGE_MAX_LATE;i++){ ROVER_THRESHOLDS.push(Math.round(150*Math.pow(i,1.5))); }
+  function roverStageMax(){ return gameState.stage>=2 ? ROVER_STAGE_MAX_LATE : ROVER_STAGE_MAX_EARLY; }
+  function domeStageMax(){ return gameState.stage>=2 ? DOME_STAGE_MAX_LATE : DOME_STAGE_MAX_EARLY; }
+  function renderStageCaps(){
+    const rm = $('rover-stage-max'), dm = $('dome-stage-max');
+    if(rm) rm.textContent = roverStageMax();
+    if(dm) dm.textContent = domeStageMax();
+  }
+
+  /* ---------------- Main loop ---------------- */
+  function tick(){
+    gameState.elapsed += 1;
+    const s = gameState;
+
+    const dmgFactor = s.roverDamaged ? 0.1 : 1;
+    s.resources.ore += 1.2*s.collectionRate*dmgFactor;
+    s.resources.energy += 0.9*s.collectionRate*dmgFactor;
+    s.resources.sample += 0.5*s.collectionRate*dmgFactor;
+
+    // dome growth consumes a little energy passively once dome exists
+    const growthGain = 0.8*s.growthRate;
+    s.domeProgress += growthGain;
+    if(s.domeProgress>=100 && s.domeStage<domeStageMax()){
+      s.domeStage += 1; s.domeProgress = 0;
+      sfx('stageup');
+      log('ドームが段階'+s.domeStage+'へ成長しました', 'milestone');
+      showToast('生態ドームが段階 '+s.domeStage+'/'+domeStageMax()+' に成長しました');
+      flashPanel('panel-dome', false);
+      renderDomeVisual();
+    }
+
+    // rover stage progression based on cumulative ore+sample
+    if(s.roverStage<roverStageMax() && (s.resources.ore+s.resources.sample) >= ROVER_THRESHOLDS[s.roverStage]){
+      s.roverStage += 1;
+      sfx('upgrade');
+      log('探査ローバーが段階'+s.roverStage+'へアップグレードしました', 'milestone');
+      showToast('探査ローバーが段階 '+s.roverStage+'/'+roverStageMax()+' にアップグレードしました', true);
+      flashPanel('panel-rover', true);
+      renderRoverVisual();
+    }
+
+    // milestone: every 100 ore collected boosts efficiency slightly
+    if(Math.floor(s.resources.ore/100) > (s._lastOreMilestone||0)){
+      s._lastOreMilestone = Math.floor(s.resources.ore/100);
+      s.collectionRate += 0.03;
+      sfx('milestone');
+      log('鉱石の精製処理が完了。収集効率が微増しました', 'milestone');
+    }
+
+    // rover damage: while unresolved, efficiency is crushed and the dome slowly regresses
+    if(s.roverDamaged){
+      s.damagedTicks += 1;
+      if(s.damagedTicks % 1300 === 0 && s.domeStage>1){
+        s.domeStage -= 1;
+        log('ローバーの損傷が長引き、ドームが段階'+s.domeStage+'に後退しました', 'event');
+        showToast('ローバーの損傷により、ドームの段階が下がりました', true);
+        renderDomeVisual();
+      }
+    }
+
+    // random conversation event
+    if(Math.random() < 0.03 && !dialogueTimer){
+      showDialogue(DIALOGUES[Math.floor(Math.random()*DIALOGUES.length)]);
+    }
+    // rare anomaly QTE event
+    if(Math.random() < 0.012 && !anomalyActive){
+      triggerAnomaly();
+    }
+
+    // stage-2+ (未知の環境) random events — only one per tick
+    if(s.stage>=2){
+      const roll = Math.random();
+      if(roll < 0.01){ triggerRareOreEvent(); }
+      else if(roll < 0.018 && !s.roverDamaged){ triggerDamageEvent(); }
+      else if(roll < 0.028){ triggerTornadoEvent(); }
+      else if(roll < 0.034){ triggerCaveEvent(); }
+    }
+
+    renderHud();
+    renderResources();
+    renderDomeProgress();
+    renderShop();
+    renderTradeShop();
+    renderStageBox();
+    renderRoverDamageUI();
+    renderStageCaps();
+  }
+
+  /* ---------------- Stage 2: 未知の環境イベント ---------------- */
+  function triggerRareOreEvent(){
+    if((gameState.shop.drill||0) >= 5){
+      const bonus = 10 + Math.floor(Math.random()*8);
+      gameState.resources.crystal += bonus;
+      sfx('milestone');
+      log('地表に露出した異常鉱石を回収しました(異常結晶+'+bonus+')', 'milestone');
+      showToast('異常鉱石の塊を発見・回収しました(+'+bonus+')');
+      renderResources();
+    } else {
+      log('地表に異常鉱石らしきものが見えましたが、ドリル性能が足りず素通りしてしまいました', 'event');
+    }
+  }
+  function triggerDamageEvent(){
+    gameState.roverDamaged = true;
+    gameState.damagedTicks = 0;
+    sfx('alert');
+    log('未知の物体との衝突、または窪みへの落下でローバーが損傷しました', 'event');
+    showToast('ローバーが損傷しました。修復が必要です', true);
+    flashPanel('panel-rover', true);
+    renderRoverDamageUI();
+  }
+  function repairRover(){
+    if(gameState.resources.energy < 300) return;
+    gameState.resources.energy -= 300;
+    gameState.roverDamaged = false;
+    gameState.damagedTicks = 0;
+    sfx('upgrade');
+    log('ローバーを修復しました', 'milestone');
+    showToast('ローバーの修復が完了しました');
+    renderResources(); renderRoverDamageUI();
+  }
+  function triggerTornadoEvent(){
+    if((gameState.shop.engine||0) >= 1){
+      log('動力エンジンの強化により、竜巻の影響を回避しました', 'milestone');
+      showToast('動力エンジンのおかげで竜巻を切り抜けました');
+      return;
+    }
+    sfx('alert');
+    ['ore','energy','sample'].forEach(k=>{ gameState.resources[k] = Math.max(0, gameState.resources[k]-10); });
+    log('竜巻が発生し、収集していた資源の一部が失われました(各種-10)', 'event');
+    showToast('竜巻発生!資源の一部が失われました', true);
+    renderResources();
+  }
+  function triggerCaveEvent(){
+    gameState.resources.ore += 150;
+    gameState.resources.energy += 100;
+    gameState.resources.crystal += 20;
+    sfx('milestone');
+    log('脇道の洞窟で大量の鉱石・エネルギー結晶・異常結晶を発見しました', 'milestone');
+    showToast('洞窟で資源を大量回収しました!');
+    renderResources();
+  }
+  function advanceStage(){
+    if(gameState.stage>=2 || gameState.resources.crystal<100) return;
+    gameState.resources.crystal -= 100;
+    gameState.stage = 2;
+    sfx('stageup');
+    showToast('未知の環境への扉が開きました');
+    log('異常結晶を消費し、次なる未知の環境へ移動しました', 'milestone');
+    renderResources(); renderStageBox(); renderStageCaps();
+    showInfo(STAGE2_INFO_HTML);
+  }
+  function renderStageBox(){
+    const box = $('stage-advance-box');
+    if(!box || !gameState) return;
+    if(gameState.stage>=2){
+      box.innerHTML = '<div class="stage-badge">現在の環境:第2区域(未知の環境)</div>';
+      return;
+    }
+    const canAfford = gameState.resources.crystal >= 100;
+    box.innerHTML = '<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">異常結晶を100個集めると、次なる未知の環境へ移動できます。</div>'+
+      '<button id="btn-advance-stage" style="width:100%;padding:9px 0;font-size:12.5px;">未知の環境へ進む(異常結晶100)</button>';
+    const btn = box.querySelector('#btn-advance-stage');
+    btn.disabled = !canAfford;
+    btn.onclick = advanceStage;
+  }
+  function renderRoverDamageUI(){
+    const box = $('rover-damage-box');
+    if(!box || !gameState) return;
+    if(gameState.roverDamaged){
+      box.style.display='block';
+      box.innerHTML = '<div style="font-size:12px;color:var(--danger);margin-bottom:6px;">ローバーが損傷しています(資源回収効率が大幅に低下中)</div>'+
+        '<button id="btn-repair-rover" style="width:100%;padding:8px 0;font-size:12.5px;">修復する(エネルギー結晶300)</button>';
+      const btn = box.querySelector('#btn-repair-rover');
+      btn.disabled = gameState.resources.energy < 300;
+      btn.onclick = repairRover;
+    } else {
+      box.style.display='none';
+      box.innerHTML='';
+    }
+  }
+
+  function showDialogue(text){
+    setBgmMode('event');
+    const box = document.createElement('div');
+    box.className='dialogue-box';
+    box.innerHTML = '<div class="speaker">通信イベント</div>'+text;
+    document.body.appendChild(box);
+    dialogueTimer = setTimeout(()=>{
+      box.remove();
+      dialogueTimer=null;
+      setBgmMode('calm');
+    },5000);
+  }
+
+  function triggerAnomaly(){
+    anomalyActive = true;
+    sfx('alert');
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:fixed; bottom:26px; left:50%; transform:translateX(-50%); z-index:20; display:flex; flex-direction:column; align-items:center; gap:8px;';
+    const btn = document.createElement('button');
+    btn.className='anomaly-btn';
+    btn.style.position='static';
+    btn.textContent='異常信号を解析する';
+    const caption = document.createElement('div');
+    caption.textContent = '押すとレア資源(異常結晶)を入手できます';
+    caption.style.cssText = 'font-size:11.5px; color:var(--text-dim); background:var(--panel); border:1px solid var(--border); padding:4px 10px; border-radius:3px;';
+    wrap.appendChild(btn); wrap.appendChild(caption);
+    document.body.appendChild(wrap);
+    let done=false;
+    btn.onclick = ()=>{
+      if(done) return; done=true;
+      gameState.resources.crystal += 5;
+      sfx('milestone');
+      log('異常信号の解析に成功。異常結晶を入手しました', 'event');
+      renderResources();
+      wrap.remove(); clearTimeout(anomalyTimer); anomalyActive=false;
+    };
+    anomalyTimer = setTimeout(()=>{
+      if(!done){ wrap.remove(); log('異常信号は解析されずに消失しました', 'event'); anomalyActive=false; }
+    },4500);
+  }
+
+  function log(text, cls){
+    const panel = $('log-panel');
+    const line = document.createElement('div');
+    line.className = 'log-line'+(cls?(' '+cls):'');
+    line.textContent = text;
+    panel.prepend(line);
+    while(panel.children.length>12) panel.removeChild(panel.lastChild);
+  }
+
+  function showToast(text, warm){
+    const t = document.createElement('div');
+    t.className = 'toast'+(warm?' warm':'');
+    t.textContent = text;
+    $('toast-layer').appendChild(t);
+    setTimeout(()=>t.remove(), 3500);
+  }
+  function flashPanel(id, warm){
+    const el = $(id);
+    if(!el) return;
+    const cls = warm ? 'flash-warm' : 'flash';
+    el.classList.remove('flash','flash-warm');
+    void el.offsetWidth; // restart animation if triggered again quickly
+    el.classList.add(cls);
+    setTimeout(()=>el.classList.remove(cls), 1300);
+  }
+
+  /* ---------------- Rendering ---------------- */
+  function renderAll(){
+    renderHud(); renderResources(); renderRoverVisual(); renderDomeVisual(); renderDomeProgress();
+    renderStageBox(); renderRoverDamageUI(); renderStageCaps(); renderTradeShop();
+  }
+  function renderHud(){
+    $('hud-elapsed').textContent = gameState.elapsed;
+  }
+  function renderResources(){
+    const r = gameState.resources;
+    $('res-ore').textContent = Math.floor(r.ore);
+    $('res-energy').textContent = Math.floor(r.energy);
+    $('res-sample').textContent = Math.floor(r.sample);
+    $('res-crystal').textContent = Math.floor(r.crystal);
+  }
+  function renderDomeProgress(){
+    $('dome-progress-bar').style.width = clamp(gameState.domeProgress,0,100)+'%';
+    $('dome-stage-num').textContent = gameState.domeStage;
+  }
+  function renderRoverVisual(){
+    $('rover-stage-num').textContent = gameState.roverStage;
+    const stage = gameState.roverStage;
+    $('part-drill').style.opacity = stage>=2 ? '1':'0';
+    $('drone').style.opacity = stage>=3 ? '1':'0';
+    $('part-lab').style.opacity = stage>=4 ? '1':'0';
+    $('part-arm').style.opacity = stage>=5 ? '1':'0';
+    const track = document.querySelector('.track');
+    if(!track.dataset.animated){
+      track.dataset.animated='1';
+      animateRover();
+    }
+  }
+  function animateRover(){
+    const rover = $('rover'); const drone = $('drone');
+    let x=0, dir=1;
+    setInterval(()=>{
+      if(!tickTimer) return; // paused
+      const speed = 1 + gameState.roverStage*0.4;
+      x += dir*speed;
+      const max = document.querySelector('.track').clientWidth - 70;
+      if(x>=max || x<=0) dir*=-1;
+      rover.style.transform = 'translateX('+x+'px)';
+      drone.style.transform = 'translateX('+(x+60*dir)+'px)';
+    },60);
+  }
+  function renderDomeVisual(){
+    const stage = gameState.domeStage;
+    const core = $('dome-core'); const ring2 = $('dome-ring2');
+    const r = Math.min(8 + stage*1.7, 30);
+    core.setAttribute('r', r);
+    core.setAttribute('opacity', Math.min(0.35 + stage*0.045, 0.95));
+    ring2.setAttribute('r', Math.min(r+10, 40));
+    ring2.setAttribute('opacity', stage>=2 ? Math.min(0.25 + stage*0.03, 0.6) : 0);
+    const life = $('dome-life');
+    life.innerHTML='';
+    const dotCount = Math.min(stage-1, 12);
+    for(let i=0;i<dotCount;i++){
+      const ring = Math.floor(i/6);
+      const posInRing = i%6;
+      const angle = (Math.PI*2/6)*posInRing - Math.PI/2 + ring*0.35;
+      const radius = 26 + ring*13;
+      const cx = 70 + Math.cos(angle)*radius;
+      const cy = 90 + Math.sin(angle)*(radius*0.65);
+      const dot = document.createElementNS('http://www.w3.org/2000/svg','circle');
+      dot.setAttribute('cx',cx); dot.setAttribute('cy',cy); dot.setAttribute('r',3.2);
+      dot.setAttribute('fill', i%2===0 ? '#4fd1c5' : '#e8a33d');
+      dot.setAttribute('opacity','0.85');
+      life.appendChild(dot);
+    }
+  }
+  function renderShop(){
+    const list = $('shop-list');
+    list.innerHTML='';
+    SHOP_ITEMS.forEach(item=>{
+      const owned = gameState.shop[item.id]||0;
+      const cost = Math.round(item.cost * Math.pow(1.6, owned));
+      const row = document.createElement('div');
+      row.className='shop-item';
+      const canAfford = gameState.resources[item.costRes] >= cost;
+      row.innerHTML = '<div><div class="sname">'+item.name+' <span class="mono" style="color:var(--text-faint)">Lv.'+owned+'</span></div>'+
+        '<div class="scost">'+labelFor(item.costRes)+' '+cost+'</div></div>';
+      const btn = document.createElement('button');
+      btn.textContent='購入';
+      btn.disabled = !canAfford;
+      btn.onclick = ()=>{
+        gameState.resources[item.costRes] -= cost;
+        gameState.shop[item.id] = owned+1;
+        item.effect(gameState);
+        sfx('upgrade');
+        log(item.name+'を導入しました', 'event');
+        renderResources(); renderShop();
+      };
+      row.appendChild(btn);
+      list.appendChild(row);
+    });
+  }
+  function labelFor(res){
+    return {ore:'鉱石',energy:'エネルギー結晶',sample:'地質サンプル',crystal:'異常結晶'}[res];
+  }
+
+  const TRADE_ITEMS = [
+    { id:'t1', costRes:'ore', cost:50, gainRes:'energy', gain:30 },
+    { id:'t2', costRes:'sample', cost:70, gainRes:'crystal', gain:7 },
+    { id:'t3', costRes:'ore', cost:500, gainRes:'crystal', gain:3 },
+    { id:'t4', costRes:'ore', cost:100, gainRes:'sample', gain:30 },
+  ];
+  function renderTradeShop(){
+    const list = $('trade-list');
+    if(!list || !gameState) return;
+    list.innerHTML='';
+    TRADE_ITEMS.forEach(item=>{
+      const canAfford = gameState.resources[item.costRes] >= item.cost;
+      const row = document.createElement('div');
+      row.className='shop-item';
+      row.innerHTML = '<div><div class="sname">'+labelFor(item.costRes)+' '+item.cost+' → '+labelFor(item.gainRes)+' '+item.gain+'</div></div>';
+      const btn = document.createElement('button');
+      btn.textContent='交換';
+      btn.disabled = !canAfford;
+      btn.onclick = ()=>doTrade(item);
+      row.appendChild(btn);
+      list.appendChild(row);
+    });
+  }
+  function doTrade(item){
+    if(gameState.resources[item.costRes] < item.cost) return;
+    gameState.resources[item.costRes] -= item.cost;
+    gameState.resources[item.gainRes] += item.gain;
+    sfx('click');
+    log(labelFor(item.costRes)+'を'+labelFor(item.gainRes)+'に交換しました', 'event');
+    renderResources(); renderTradeShop(); renderShop(); renderStageBox();
+  }
+
+  /* ---------------- Pause / Save ---------------- */
+  $('btn-pause').addEventListener('click', ()=>{
+    ensureAudio();
+    if(tickTimer){
+      stopTicking();
+      $('btn-pause').textContent='再開する';
+      log('探査を一時停止しました');
+    } else {
+      resumeTicking();
+      $('btn-pause').textContent='一時停止';
+      log('探査を再開しました');
+    }
+  });
+  $('btn-save').addEventListener('click', async ()=>{
+    ensureAudio(); sfx('click');
+    const ok = await writeSave(gameState);
+    log(ok ? 'データを保存しました' : '保存に失敗しました', ok?'milestone':'event');
+  });
+  $('btn-game-options').addEventListener('click', ()=>{
+    ensureAudio(); sfx('click');
+    optionsOrigin='game';
+    const wasPaused = !tickTimer;
+    gameState._wasPausedBeforeOptions = wasPaused;
+    stopTicking();
+    renderOptions('options-panel-game', 'screen-game');
+    showScreen('screen-game-options');
+  });
+  $('btn-help').addEventListener('click', ()=>{
+    ensureAudio(); sfx('click');
+    showInfo(TUTORIAL_HTML);
+  });
+
+  /* ---------------- Options ---------------- */
+  function renderOptions(panelId, backTargetScreen){
+    const s = gameState ? gameState.settings : {bgm:60, se:70, aspect: isMobile()?'mobile':'default'};
+    const username = gameState ? gameState.username : '';
+    const panel = $(panelId);
+    const mobile = isMobile();
+
+    panel.innerHTML = `
+      <h2>オプション</h2>
+      <div class="opt-row">
+        <label>バックグラウンドサウンド音量 <span class="val-readout" id="bgm-val">${s.bgm}</span></label>
+        <input type="range" id="opt-bgm" min="0" max="100" value="${s.bgm}">
+      </div>
+      <div class="opt-row">
+        <label>ゲーム効果音音量 <span class="val-readout" id="se-val">${s.se}</span></label>
+        <input type="range" id="opt-se" min="0" max="100" value="${s.se}">
+      </div>
+      ${gameState ? `<div class="opt-row">
+        <label>表示ユーザーネーム</label>
+        <input type="text" id="opt-username" value="${escapeHtml(username)}" maxlength="16">
+      </div>` : ''}
+      <div class="opt-row">
+        <label>画角設定</label>
+        ${mobile ? '<div class="note">スマートフォン向け表示に自動調整されています</div>' :
+          `<div class="radio-group" id="aspect-group">
+            <button data-v="default" class="${s.aspect==='default'?'selected':''}">通常(初期)</button>
+            <button data-v="portrait" class="${s.aspect==='portrait'?'selected':''}">縦型集中</button>
+            <button data-v="landscape" class="${s.aspect==='landscape'?'selected':''}">横型集中</button>
+          </div>`}
+      </div>
+      ${gameState ? `<div class="danger-zone">
+        <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:10px;">データ破棄設定</label>
+        <div class="row">
+          <button id="opt-delete-title">削除してタイトルへ戻る</button>
+          <button id="opt-delete-stay">このデータを削除する</button>
+        </div>
+      </div>` : ''}
+      <button class="opt-back">戻る</button>
+    `;
+
+    $(panel.id).querySelector('#opt-bgm').addEventListener('input', (e)=>{
+      s.bgm = Number(e.target.value);
+      panel.querySelector('#bgm-val').textContent = s.bgm;
+      applyVolumes();
+      if(gameState) writeSave(gameState);
+    });
+    $(panel.id).querySelector('#opt-se').addEventListener('input', (e)=>{
+      s.se = Number(e.target.value);
+      panel.querySelector('#se-val').textContent = s.se;
+      applyVolumes();
+      if(gameState) writeSave(gameState);
+    });
+    const unameInput = panel.querySelector('#opt-username');
+    if(unameInput){
+      unameInput.addEventListener('change', (e)=>{
+        gameState.username = e.target.value.trim() || gameState.username;
+        $('hud-username').textContent = gameState.username;
+        writeSave(gameState);
+      });
+    }
+    const aspectGroup = panel.querySelector('#aspect-group');
+    if(aspectGroup){
+      aspectGroup.querySelectorAll('button').forEach(b=>{
+        b.addEventListener('click', ()=>{
+          s.aspect = b.dataset.v;
+          aspectGroup.querySelectorAll('button').forEach(x=>x.classList.remove('selected'));
+          b.classList.add('selected');
+          applyAspect();
+          if(gameState) writeSave(gameState);
+        });
+      });
+    }
+    const delTitle = panel.querySelector('#opt-delete-title');
+    if(delTitle){
+      delTitle.addEventListener('click', ()=>{
+        showConfirm('保存されている進行データを削除し、タイトル画面へ戻ります。よろしいですか?', async ()=>{
+          await removeSave();
+          stopTicking();
+          gameState = null;
+          showScreen('screen-title');
+        }, {danger:true, okLabel:'削除して戻る'});
+      });
+    }
+    const delStay = panel.querySelector('#opt-delete-stay');
+    if(delStay){
+      delStay.addEventListener('click', ()=>{
+        showConfirm('保存されている進行データを削除します。現在の画面はそのままです。よろしいですか?', async ()=>{
+          await removeSave();
+          log('保存データを削除しました');
+        }, {danger:true, okLabel:'削除する'});
+      });
+    }
+    panel.querySelector('.opt-back').addEventListener('click', ()=>{
+      if(backTargetScreen==='screen-title'){
+        showScreen('screen-title');
+      } else {
+        showScreen('screen-game');
+        if(!gameState._wasPausedBeforeOptions){
+          resumeTicking();
+        }
+      }
+    });
+  }
+  function escapeHtml(str){
+    const d=document.createElement('div'); d.textContent=str; return d.innerHTML;
+  }
+
+  function applyAspect(){
+    const app = $('app');
+    app.classList.remove('aspect-portrait','aspect-landscape');
+    const a = gameState ? gameState.settings.aspect : 'default';
+    if(a==='portrait') app.classList.add('aspect-portrait');
+    if(a==='landscape') app.classList.add('aspect-landscape');
+  }
+
+})();
+</script>
+</body>
+</html>
