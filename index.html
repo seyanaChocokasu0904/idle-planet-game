@@ -276,7 +276,7 @@
 
   <!-- COUNTDOWN -->
   <div class="screen" id="screen-countdown">
-    <div class="countdown-num mono" id="countdown-num">15</div>
+    <div class="countdown-num mono" id="countdown-num">10</div>
     <p>進行状況を復元しています。まもなく開始します…</p>
   </div>
 
@@ -671,7 +671,7 @@
   /* ---------------- Countdown ---------------- */
   function startCountdown(){
     showScreen('screen-countdown');
-    let n = 15;
+    let n = 10;
     $('countdown-num').textContent = n;
     clearInterval(countdownTimer);
     countdownTimer = setInterval(()=>{
